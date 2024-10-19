@@ -1,0 +1,312 @@
+#!/usr/bin/gjs
+imports.gi.versions.Gtk = '4.0';
+imports.gi.versions.Gdk = '4.0';
+
+const { GLib, Gio, GObject, Gtk, Gdk } = imports.gi;
+
+// Debug configuration
+let DEBUG = false;
+if (ARGV.includes('--debug')) {
+    DEBUG = true;
+}
+
+function debug(msg) {
+    if (DEBUG) {
+        print(`[DEBUG] ${msg}`);
+    }
+}
+
+const CONFIG = {
+    WINDOW_WIDTH: 200,
+    WINDOW_HEIGHT: 50,
+    MARGIN: 20,
+    CLEAR_TIMEOUT: 1500,
+    FADE_TIMEOUT: 500,
+    KEY_COMBO_THRESHOLD: 300,
+    MAX_KEYS: 10,
+};
+
+// Special keys mapping
+const specialKeysMap = {
+    'SHIFT': '󰘶',
+    'CAPS': '󰘲',
+    'TAB': '󰌒',
+    'ENTER': '󰌑',
+    'COMPOSE': '󰮫',
+    'BACKSPACE': '󰌍',
+    'SPACE': '󱁐',
+    'CONTROL': 'Ctrl',
+    'ALT': 'Alt',
+    'META': 'Win',
+    'ESC': '󱊷',
+    'UP': '',
+    'DOWN': '',
+    'LEFT': '',
+    'RIGHT': ''
+};
+
+let deviceMessagesIgnored = true;
+
+function processKeyName(keyName) {
+    const specialKeysPattern = /[\\|\/.,=\-]/;
+    if (specialKeysPattern.test(keyName)) {
+        return keyName;
+    }
+
+    const upperKey = keyName.toUpperCase();
+    return specialKeysMap[upperKey] || keyName;
+}
+
+const KeyVisualizer = GObject.registerClass(
+    class KeyVisualizer extends Gtk.Application {
+        constructor() {
+            super({
+                application_id: 'd7om.dev.keyvis',
+                flags: Gio.ApplicationFlags.NON_UNIQUE,
+            });
+
+            this.keyBuffer = [];
+            this.activeKeys = new Set();
+            this.clearTimeout = null;
+            this.fadeTimeout = null;
+            debug('KeyVisualizer initialized');
+        }
+
+        vfunc_activate() {
+            debug('Activating application');
+            this._createUI();
+            this._startKeyMonitor();
+        }
+
+        _createUI() {
+            const display = Gdk.Display.get_default();
+            if (!display) {
+                debug('Error: Could not get default display');
+                return;
+            }
+
+            const monitors = display.get_monitors();
+            if (monitors.get_n_items() === 0) {
+                debug('Error: No monitors found');
+                return;
+            }
+
+            const monitor = monitors.get_item(0);
+            const geometry = monitor.get_geometry();
+            if (!geometry) {
+                debug('Error: Could not get monitor geometry');
+                return;
+            }
+
+            const screenWidth = geometry.width;
+            const screenHeight = geometry.height;
+
+            // Calculate position for bottom right corner
+            const x = screenWidth - CONFIG.WINDOW_WIDTH - CONFIG.MARGIN;
+            const y = screenHeight - CONFIG.WINDOW_HEIGHT - CONFIG.MARGIN;
+
+            const window = new Gtk.Window({
+                application: this,
+                title: 'Key Visualizer',
+                default_width: CONFIG.WINDOW_WIDTH,
+                default_height: CONFIG.WINDOW_HEIGHT,
+                resizable: true,
+            });
+
+            window.set_decorated(false);
+            window.set_transient_for(null);
+            window.set_modal(true); // This is the GTK4 way
+
+            // NOTE: Dosent work for wayland
+            // works for x11 thoug .. will be used later
+            // window.set_position(Gtk.WindowPosition.CENTER);
+            // window.move(x, y);
+
+            this._label = new Gtk.Label({
+                label: '',
+                wrap: false,
+                justify: Gtk.Justification.CENTER,
+            });
+
+            const cssProvider = new Gtk.CssProvider();
+            cssProvider.load_from_data(`
+                window {
+                    color: #ffffff;
+                    padding: 10px;
+                    border-radius: 5px;
+                    background-color: rgba(0, 0, 0, 0.8);
+                    transition: opacity 500ms ease-in-out;
+                    letter-spacing: 4px;
+                    opacity: 0;
+                }
+                label {
+                    font-size: 1.8rem;
+                    font-family: "Rubik", "Geist", "AR One Sans", "Reddit Sans", "Inter",
+                    "Roboto", "Ubuntu", "Noto Sans", sans-serif;
+                }
+            `, -1);
+
+            Gtk.StyleContext.add_provider_for_display(
+                display,
+                cssProvider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            );
+
+            window.set_child(this._label);
+            this._window = window;
+            window.show();
+            debug('Window created and shown');
+
+            this._setWindowOpacity(0);
+        }
+
+        _setWindowOpacity(opacity) {
+            const css = new Gtk.CssProvider();
+            css.load_from_data(`
+                window {
+                    opacity: ${opacity};
+                }
+            `, -1);
+
+            const display = Gdk.Display.get_default();
+            Gtk.StyleContext.add_provider_for_display(
+                display,
+                css,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            );
+        }
+
+        _startKeyMonitor() {
+            debug('Starting key monitor');
+            try {
+                const keydMonitor = Gio.Subprocess.new(
+                    ['keyd', 'monitor'],
+                    Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+                );
+
+                const stdout = keydMonitor.get_stdout_pipe();
+                this._readOutput(stdout);
+                debug('Key monitor started successfully');
+            } catch (e) {
+                debug(`Error starting keyd monitor: ${e.message}`);
+                print('Error starting keyd monitor:', e.message);
+                this.quit();
+            }
+        }
+
+        _readOutput(stream) {
+            const reader = new Gio.DataInputStream({
+                base_stream: stream,
+                close_base_stream: true,
+            });
+
+            const readLine = () => {
+                reader.read_line_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
+                    try {
+                        const [line] = stream.read_line_finish(result);
+                        if (line) {
+                            const output = new TextDecoder().decode(line).trim();
+                            debug(`Raw output from keyd: ${output}`);
+                            if (!output || output.includes('device added:')) {
+                                readLine();
+                                return;
+                            }
+
+                            if (deviceMessagesIgnored) {
+                                if (output.startsWith('device added:')) {
+                                    debug('Skipping device added message');
+                                    readLine();
+                                    return;
+                                } else {
+                                    deviceMessagesIgnored = false;
+                                }
+                            }
+
+                            this._handleKeyEvent(output);
+                        }
+                        readLine();
+                    } catch (e) {
+                        debug(`Error reading keyd output: ${e.message}`);
+                        readLine();
+                    }
+                });
+            };
+
+            readLine();
+        }
+
+
+
+        _handleKeyEvent(output) {
+            debug(`Handling key event: ${output}`);
+            const match = output.match(/keyd virtual keyboard\s+(\S+)\s+(\S+)\s+(up|down)/);
+            if (!match) {
+                debug('No match found in output');
+                return;
+            }
+
+            const keyName = match[2];
+            const keyState = match[3];
+
+            debug(`Processed key: ${keyName}, State: ${keyState}`);
+
+            if (keyState === 'down') {
+
+                if (!this.activeKeys.has(keyName)) {
+                    this._window.show();
+                    this._setWindowOpacity(1);
+
+                    this.keyBuffer.push(keyName);
+                    if (this.keyBuffer.length > CONFIG.MAX_KEYS) {
+                        this.keyBuffer.shift();
+                    }
+
+                    this._updateLabel();
+                    this._startClearTimeout();
+                }
+
+                this.activeKeys.add(keyName);
+                debug(`Active keys updated: ${Array.from(this.activeKeys).join(', ')}`);
+            } else if (keyState === 'up') {
+                this.activeKeys.delete(keyName);
+                debug(`Key released: ${keyName}`);
+            }
+        }
+
+
+
+        _startClearTimeout() {
+            if (this.clearTimeout) {
+                GLib.source_remove(this.clearTimeout);
+            }
+
+            this.clearTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, CONFIG.CLEAR_TIMEOUT, () => {
+                this.keyBuffer = [];
+                this._updateLabel();
+                this._startFadeTimeout();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
+        _startFadeTimeout() {
+            if (this.fadeTimeout) {
+                GLib.source_remove(this.fadeTimeout);
+            }
+
+            this.fadeTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, CONFIG.FADE_TIMEOUT, () => {
+                this._window.hide();
+                this._setWindowOpacity(0);
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
+        _updateLabel() {
+            this._label.label = this.keyBuffer.join(' ');
+        }
+
+    }
+);
+
+const app = new KeyVisualizer();
+app.run([]);
+
