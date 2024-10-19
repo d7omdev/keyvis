@@ -6,11 +6,16 @@ const { GLib, Gio, GObject, Gtk, Gdk } = imports.gi;
 
 // Debug configuration
 let DEBUG = false;
+let ISKEYDLOG = true;
 if (ARGV.includes('--debug')) {
+    if (ARGV.includes('--keydlog')) {
+        ISKEYDLOG = false;
+    }
     DEBUG = true;
 }
 
-function debug(msg) {
+function debug(msg, isKeydLog) {
+    if (isKeydLog) return;
     if (DEBUG) {
         print(`[DEBUG] ${msg}`);
     }
@@ -39,22 +44,27 @@ const specialKeysMap = {
     'ALT': 'Alt',
     'META': 'Win',
     'ESC': '󱊷',
-    'UP': '',
-    'DOWN': '',
-    'LEFT': '',
-    'RIGHT': ''
+    'UP': '',
+    'DOWN': '',
 };
 
 let deviceMessagesIgnored = true;
 
 function processKeyName(keyName) {
     const specialKeysPattern = /[\\|\/.,=\-]/;
+
     if (specialKeysPattern.test(keyName)) {
         return keyName;
     }
+    for (const key in specialKeysMap) {
+        if (keyName.toUpperCase() === 'LEFT') return '';
+        if (keyName.toUpperCase() === 'RIGHT') return '';
+        if (keyName.toUpperCase().includes(key.toUpperCase())) {
+            return specialKeysMap[key];
+        }
+    }
 
-    const upperKey = keyName.toUpperCase();
-    return specialKeysMap[upperKey] || keyName;
+    return keyName;
 }
 
 const KeyVisualizer = GObject.registerClass(
@@ -69,6 +79,7 @@ const KeyVisualizer = GObject.registerClass(
             this.activeKeys = new Set();
             this.clearTimeout = null;
             this.fadeTimeout = null;
+            this.lastKeyTime = 0;
             debug('KeyVisualizer initialized');
         }
 
@@ -206,7 +217,7 @@ const KeyVisualizer = GObject.registerClass(
                         const [line] = stream.read_line_finish(result);
                         if (line) {
                             const output = new TextDecoder().decode(line).trim();
-                            debug(`Raw output from keyd: ${output}`);
+                            debug(`Raw output from keyd: ${output}`, ISKEYDLOG);
                             if (!output || output.includes('device added:')) {
                                 readLine();
                                 return;
@@ -235,10 +246,8 @@ const KeyVisualizer = GObject.registerClass(
             readLine();
         }
 
-
-
         _handleKeyEvent(output) {
-            debug(`Handling key event: ${output}`);
+            debug(`Handling key event: ${output}`, true);
             const match = output.match(/keyd virtual keyboard\s+(\S+)\s+(\S+)\s+(up|down)/);
             if (!match) {
                 debug('No match found in output');
@@ -251,28 +260,52 @@ const KeyVisualizer = GObject.registerClass(
             debug(`Processed key: ${keyName}, State: ${keyState}`);
 
             if (keyState === 'down') {
+                const currentTime = Date.now();
 
-                if (!this.activeKeys.has(keyName)) {
-                    this._window.show();
-                    this._setWindowOpacity(1);
+                if (this.activeKeys.size > 0) {
+                    const timeSinceLastKey = currentTime - this.lastKeyTime;
 
-                    this.keyBuffer.push(keyName);
-                    if (this.keyBuffer.length > CONFIG.MAX_KEYS) {
-                        this.keyBuffer.shift();
+                    if (timeSinceLastKey < CONFIG.KEY_COMBO_THRESHOLD) {
+                        // If the key is still held down, add this key with a `+`
+                        if (this.keyBuffer.length >= CONFIG.COMBO_MAX_KEYS) {
+                            this.keyBuffer.shift();
+                        }
+
+                        if (this.keyBuffer.length > 0) {
+                            const lastKeyIndex = this.keyBuffer.length - 1;
+                            this.keyBuffer[lastKeyIndex] += ' + ' + processKeyName(keyName);
+                        }
+                    } else {
+                        // Time exceeded; add as a new key
+                        if (this.keyBuffer.length >= CONFIG.MAX_KEYS) {
+                            this.keyBuffer.shift(); // Remove the oldest single key
+                        }
+                        this.keyBuffer.push(processKeyName(keyName));
                     }
-
-                    this._updateLabel();
-                    this._startClearTimeout();
+                } else {
+                    // No active keys; just add the new key
+                    if (this.keyBuffer.length >= CONFIG.MAX_KEYS) {
+                        this.keyBuffer.shift(); // Remove the oldest single key
+                    }
+                    this.keyBuffer.push(processKeyName(keyName));
                 }
 
                 this.activeKeys.add(keyName);
-                debug(`Active keys updated: ${Array.from(this.activeKeys).join(', ')}`);
+                this.lastKeyTime = currentTime; // Update last key time
+                this._updateLabel();
+                this._startClearTimeout();
+                this._window.show();
+                this._setWindowOpacity(1);
+                debug(`Active keys updated: ${Array.from(this.activeKeys).join(', ')}`, true);
             } else if (keyState === 'up') {
                 this.activeKeys.delete(keyName);
-                debug(`Key released: ${keyName}`);
+                debug(`Key released: ${keyName}`, true);
+                // Clear the last key time if no keys are active
+                if (this.activeKeys.size === 0) {
+                    this.lastKeyTime = 0; // Reset to avoid sticking on a single key
+                }
             }
         }
-
 
 
         _startClearTimeout() {
@@ -304,9 +337,9 @@ const KeyVisualizer = GObject.registerClass(
             this._label.label = this.keyBuffer.join(' ');
         }
 
+
     }
 );
 
 const app = new KeyVisualizer();
 app.run([]);
-
