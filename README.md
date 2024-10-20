@@ -1,6 +1,8 @@
 # KeyVis
 
-This is a work in progress tool that visualizes keyboard inputs in a GTK window. It is built using the GObject and Gtk libraries in GJS (GNOME JavaScript).
+A lightweight tool for visualizing keystrokes in a clean GTK window. Built using GJS with GObject and Gtk libraries, it provides a simple, responsive way to display keyboard inputs in real-time.
+
+![KeyVis Screenshot](./keyvis.png)
 
 ## Features
 
