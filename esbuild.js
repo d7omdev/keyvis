@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 
 await build({
-    entryPoints: ['keyvis.ts'],
+    entryPoints: ['src/keyvis.ts'],
     outfile: 'dist/main.js',
     bundle: true,
     target: "firefox115",

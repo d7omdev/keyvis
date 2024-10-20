@@ -9,6 +9,9 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
+import { exit } from '@girs/gjs/system';
+
+const ARGV = imports.system.programArgs;
 
 interface Config {
     WINDOW_WIDTH: number;
@@ -22,10 +25,30 @@ interface Config {
 
 let DEBUG: boolean = false;
 let ISKEYDLOG: boolean = false;
-if (ARGV.includes('--debug')) {
+
+
+if (ARGV.includes('--help') || ARGV.includes('-h')) {
+    print(`Key Visualizer - A simple visualizer for key presses`);
+    print(`Usage: keyvis [OPTION]`);
+    print(``);
+    print(`Options:`);
+    print(`  --debug,    -d      Enable debug mode`);
+    print(`  --keydlog,  -k      Enable keyd log`);
+    print(`  --help,     -h      Show this help message`);
+    print(`  --version,  -v      Show version information`);
+    print(``);
+    exit(0);
+}
+
+if (ARGV.includes('--version') || ARGV.includes('-v')) {
+    print(`Key Visualizer 0.1.0`);
+    exit(0);
+}
+
+if (ARGV.includes('--debug') || ARGV.includes('-d')) {
     DEBUG = true;
 }
-if (ARGV.includes('--keydlog')) {
+if (ARGV.includes('--keydlog') || ARGV.includes('-k')) {
     ISKEYDLOG = true;
 }
 
@@ -73,6 +96,10 @@ const specialKeysMap: Record<string, string> = {
     'ALT': 'Alt',
     'META': 'Win',
     'ESC': 'Esc',
+    'INSERT': 'Insert',
+    'DELETE': 'Del',
+    'END': 'End',
+    'HOME': 'Home',
     'UP': '',
     'DOWN': '',
 };
@@ -112,7 +139,8 @@ function setupHyprlandRules() {
         'windowrulev2 size 200 50,class:(d7om.dev.keyvis)',
         'windowrulev2 animation slide bottom,class:(d7om.dev.keyvis)',
         'windowrulev2 nofocus,class:(d7om.dev.keyvis)',
-        'windowrule move 80% 92%,^(d7om.dev.keyvis)$'
+        'windowrule move 80% 92%,^(d7om.dev.keyvis)$',
+        'windowrule noborder,class:(d7om.dev.keyvis)',
     ];
 
     try {
@@ -178,6 +206,7 @@ const KeyVisualizer = GObject.registerClass(
 
             const window = new Gtk.Window({
                 application: this,
+                title: 'Key Visualizer',
                 resizable: false,
                 halign: Gtk.Align.END
             });
@@ -214,19 +243,20 @@ const KeyVisualizer = GObject.registerClass(
             let textColor = DEBUG ? '#000000' : '#ffffff';
             cssProvider.load_from_data(`
                     window {
-                        color: ${textColor};
-                        padding: 10px;
-                        border-radius: 5px;
-                        background-color: ${backgroundColor};
-                        transition: opacity 0.5s;
-                        opacity: 0;
+                    color: ${textColor};
+                    padding: 10px;
+                    border-radius: 5px;
+                    background-color: ${backgroundColor};
+                    transition: opacity 0.5s;
+                    opacity: 0;
                     }
+
                     label {
-                        font-size: 1.8rem;
-                        letter-spacing: 6px;
-                        font-family: "Rubik", sans-serif;
+                    font-size: 1.8rem;
+                    letter-spacing: 6px;
+                    font-family: "Rubik", "Geist", "AR One Sans", "Reddit Sans", "Inter";
                     }
-                `, -1);
+                    `, -1);
 
             Gtk.StyleContext.add_provider_for_display(
                 display,
@@ -246,10 +276,10 @@ const KeyVisualizer = GObject.registerClass(
             const css = new Gtk.CssProvider();
             css.load_from_data(`
                         window {
-                            opacity: ${opacity};
-                            transition: opacity 0.5s;
-                        }
-                    `, -1);
+    opacity: ${opacity};
+    transition: opacity 0.5s;
+}
+`, -1);
 
             const display = Gdk.Display.get_default();
             if (!display) {
@@ -278,7 +308,7 @@ const KeyVisualizer = GObject.registerClass(
                 this._readOutput(stdout);
                 debug('DEBUG', 'Key monitor started successfully');
             } catch (e: any) {
-                debug('ERROR', `Error starting keyd monitor: ${e.message}`);
+                debug('ERROR', `Error starting keyd monitor: ${e.message} `);
                 this.quit();
             }
         }
@@ -299,7 +329,7 @@ const KeyVisualizer = GObject.registerClass(
 
                         if (line) {
                             const output = new TextDecoder().decode(line).trim();
-                            keydlog(`Raw output from keyd: ${output}`);
+                            keydlog(`Raw output from keyd: ${output} `);
 
                             if (!output || output.includes('device added:')) {
                                 readLine();
@@ -320,7 +350,7 @@ const KeyVisualizer = GObject.registerClass(
                         }
                         readLine();
                     } catch (e: any) {
-                        debug('ERROR', `Error reading keyd output: ${e.message}`);
+                        debug('ERROR', `Error reading keyd output: ${e.message} `);
                         readLine();
                     }
                 });
@@ -330,7 +360,7 @@ const KeyVisualizer = GObject.registerClass(
         }
 
         _handleKeyEvent(output: string) {
-            keydlog(`Handling key event: ${output}`);
+            keydlog(`Handling key event: ${output} `);
             const match = output.match(/keyd virtual keyboard\s+(\S+)\s+(\S+)\s+(up|down)/);
             if (!match) {
                 debug('DEBUG', 'No match found in output');
@@ -340,7 +370,7 @@ const KeyVisualizer = GObject.registerClass(
             const keyName = match[2];
             const keyState = match[3];
 
-            debug('INFO', `Processed key: ${keyName}, State: ${keyState}`);
+            debug('INFO', `Processed key: ${keyName}, State: ${keyState} `);
 
             if (keyState === 'down') {
                 const currentTime = Date.now();
@@ -376,10 +406,10 @@ const KeyVisualizer = GObject.registerClass(
                 this._startClearTimeout();
                 this._window.show();
                 this._setWindowOpacity(1);
-                keydlog(`Active keys updated: ${Array.from(this.activeKeys).join(', ')}`);
+                keydlog(`Active keys updated: ${Array.from(this.activeKeys).join(', ')} `);
             } else if (keyState === 'up') {
                 this.activeKeys.delete(keyName);
-                keydlog(`Key released: ${keyName}`);
+                keydlog(`Key released: ${keyName} `);
                 if (this.activeKeys.size === 0) {
                     this.lastKeyTime = 0;
                 }
@@ -421,7 +451,7 @@ const KeyVisualizer = GObject.registerClass(
                 this.keyBuffer.shift();
             }
             this.keyBuffer.push(keyName);
-            debug('DEBUG', `Active keys: ${this.keyBuffer.join(' ')}`);
+            debug('DEBUG', `Active keys: ${this.keyBuffer.join(' ')} `);
             this._updateLabel();
         }
 

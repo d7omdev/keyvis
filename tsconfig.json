@@ -1,9 +1,10 @@
 {
   "compilerOptions": {   
     "lib": ["ESNext"],             
-    "types": ["@girs/gjs", "@girs/gjs/dom", "@girs/gtk-4.0", "@girs/gobject-2.0", "@girs/gio-2.0"],
+    "types": ["@girs/gjs", "@girs/gjs/dom", "@girs/gtk-4.0", "@girs/gobject-2.0", "@girs/gio-2.0","node"],
     "target": "ESNext",
     "module": "ESNext",
+    "baseUrl": "./src",
     "moduleResolution": "bundler",
     "strict": true,
     "noImplicitAny": true,
