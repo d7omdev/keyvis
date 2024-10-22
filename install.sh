@@ -6,7 +6,6 @@ set -e
 # Variables for paths
 INSTALL_DIR="/usr/local/lib/keyvis"
 EXECUTABLE="/usr/local/bin/keyvis"
-KILL_EXECUTABLE="/usr/local/bin/keyvis-kill"
 MAIN_JS="dist/main.js"
 
 # Check if necessary commands are available
@@ -43,32 +42,15 @@ echo "Creating the executable script..."
 sudo tee "$EXECUTABLE" >/dev/null <<'EOF'
 #!/usr/bin/env bash
 
-gjs -m /usr/local/lib/keyvis/main.js "$@"
-EOF
-
-# Create the executable script for keyvis-kill
-echo "Creating the keyvis-kill executable script..."
-sudo tee "$KILL_EXECUTABLE" >/dev/null <<'EOF'
-#!/usr/bin/env bash
-
-# Kill existing instances of keyvis
-pids=$(pgrep -f keyvis)
-
-if [ -n "$pids" ]; then
-    echo "Killing existing instances of keyvis with PIDs: $pids"
-    for pid in $pids; do
-        kill -9 "$pid"
-    done
+if [ $# -eq 0 ]; then
+    gjs -m /usr/local/lib/keyvis/main.js > /dev/null 2>&1 &
 else
-    echo "No running instance of keyvis found."
+    gjs -m /usr/local/lib/keyvis/main.js "$@"
 fi
-
 EOF
 
 # Make the scripts executable
 sudo chmod +x "$EXECUTABLE"
-sudo chmod +x "$KILL_EXECUTABLE"
 
 echo "KeyVis has been installed successfully."
 echo "You can now run it using the 'keyvis' command."
-echo "You can also kill the running instance using 'keyvis-kill' command."

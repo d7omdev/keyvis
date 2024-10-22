@@ -65,7 +65,7 @@ Killing KeyVis
 To kill an existing instance of KeyVis, you can use:
 
 ```sh
-keyvis-kill
+keyvis --kill # or -k
 ```
 
 This command will find and terminate any running instance of KeyVis.
