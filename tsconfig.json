@@ -13,6 +13,6 @@
     "alwaysStrict": true,
   },
   "files": [
-    "keyvis.ts",
+    "./src/keyvis.ts",
   ]
 }

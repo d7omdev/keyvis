@@ -23,33 +23,70 @@ interface Config {
     MAX_KEYS: number;
 }
 
-let DEBUG: boolean = false;
-let ISKEYDLOG: boolean = false;
+type STATE = 'INFO' | 'DEBUG' | 'ERROR';
 
+interface Option {
+    alias: string;
+    desc: string;
+}
 
-if (ARGV.includes('--help') || ARGV.includes('-h')) {
-    print(`Key Visualizer - A simple visualizer for key presses`);
-    print(`Usage: keyvis [OPTION]`);
-    print(``);
-    print(`Options:`);
-    print(`  --debug,    -d      Enable debug mode`);
-    print(`  --keydlog,  -k      Enable keyd log`);
-    print(`  --help,     -h      Show this help message`);
-    print(`  --version,  -v      Show version information`);
-    print(``);
+interface Options {
+    [key: string]: Option;
+}
+
+const OPTIONS: Options = {
+    '--help': { alias: '-h', desc: 'Show this help message' },
+    '--debug': { alias: '-d', desc: 'Enable debug mode' },
+    '--keydlog': { alias: '-l', desc: 'Enable keyd log' },
+    '--kill': { alias: '-k', desc: 'Kill all running keyvis instances' },
+    '--version': { alias: '-v', desc: 'Show version information' }
+};
+
+function showHelp(): void {
+    print('');
+    print('Key Visualizer - A simple visualizer for key presses');
+    print('Usage: keyvis [OPTION]');
+    print('');
+    print('Options:');
+    Object.entries(OPTIONS).forEach(([flag, { alias, desc }]) => {
+        print(`  ${flag.padEnd(10)} ${alias.padEnd(4)} ${desc}`);
+    });
+    print('');
     exit(0);
 }
 
-if (ARGV.includes('--version') || ARGV.includes('-v')) {
-    print(`Key Visualizer 0.1.0`);
+function killInstances(): void {
+    try {
+        const proc = Gio.Subprocess.new(
+            ['pkill', '-o', '-f', 'gjs.*keyvis'],
+            Gio.SubprocessFlags.STDOUT_PIPE,
+        );
+        proc.wait(null);
+        const status = proc.get_status();
+        status == 0 ? print('Keyvis killed successfully') : print('No keyvis instances found');
+        exit(0);
+    } catch (e) {
+        logError(e instanceof Error ? e : new Error(String(e)));
+        exit(1);
+    }
+}
+
+const hasArg = (flag: string): boolean =>
+    ARGV.includes(flag) || ARGV.includes(OPTIONS[flag].alias);
+
+if (hasArg('--help')) showHelp();
+
+if (hasArg('--version')) {
+    print('Key Visualizer 0.1.0');
     exit(0);
 }
 
-if (ARGV.includes('--debug') || ARGV.includes('-d')) {
-    DEBUG = true;
-}
-if (ARGV.includes('--keydlog') || ARGV.includes('-k')) {
-    ISKEYDLOG = true;
+const DEBUG = hasArg('--debug');
+const ISKEYDLOG = hasArg('--keydlog');
+
+if (hasArg('--keydlog') && !hasArg('--debug')) {
+    print('Error: --keydlog must be used with --debug');
+    exit(1);
 }
 
 function keydlog(msg: string): void {
@@ -57,8 +94,6 @@ function keydlog(msg: string): void {
         print(`\x1b[34m[KEYDLOG]\x1b[0m ${msg} `);
     }
 }
-
-type STATE = 'INFO' | 'DEBUG' | 'ERROR';
 
 function debug(state: STATE, msg: string): void {
     if (!state) {
@@ -75,7 +110,7 @@ function debug(state: STATE, msg: string): void {
 }
 
 const CONFIG: Config = {
-    WINDOW_WIDTH: 500,
+    WINDOW_WIDTH: 400,
     WINDOW_HEIGHT: 50,
     MARGIN: 20,
     CLEAR_TIMEOUT: 1500,
@@ -136,7 +171,6 @@ function setupHyprlandRules() {
         'windowrulev2 pin,class:(d7om.dev.keyvis)',
         'windowrulev2 noblur,class:(d7om.dev.keyvis)',
         'windowrulev2 noshadow,class:(d7om.dev.keyvis)',
-        'windowrulev2 size 200 50,class:(d7om.dev.keyvis)',
         'windowrulev2 animation slide bottom,class:(d7om.dev.keyvis)',
         'windowrulev2 nofocus,class:(d7om.dev.keyvis)',
         'windowrule move 80% 92%,^(d7om.dev.keyvis)$',
@@ -276,10 +310,10 @@ const KeyVisualizer = GObject.registerClass(
             const css = new Gtk.CssProvider();
             css.load_from_data(`
                         window {
-    opacity: ${opacity};
-    transition: opacity 0.5s;
-}
-`, -1);
+        opacity: ${opacity};
+        transition: opacity 0.5s;
+    }
+    `, -1);
 
             const display = Gdk.Display.get_default();
             if (!display) {
@@ -439,7 +473,6 @@ const KeyVisualizer = GObject.registerClass(
 
             this.fadeTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, CONFIG.FADE_TIMEOUT, () => {
                 this._setWindowOpacity(0);
-                this._window.hide();
                 this.fadeTimeout = null;
                 return GLib.SOURCE_REMOVE;
             });
@@ -471,6 +504,10 @@ const KeyVisualizer = GObject.registerClass(
     }
 );
 
+
 const app = new KeyVisualizer();
-app.run([]);
+
+hasArg('--kill') ? killInstances() : app.run([])
+
+
 
