@@ -1,25 +1,29 @@
 {
-  "name": "KeyVis",
-  "version": "0.2.0",
-  "description": "A simple and lightweight keystroke visualisation tool ",
-  "type": "module",
-  "bin": {
-    "keyvis": "./keyvis"
-  },
-  "scripts": {
-    "build:app": "bun run esbuild.js",
-    "start:app": "gjs -m dist/main.js",
-    "debug": "GTK_DEBUG=interactive gjs -m dist/main.js",
-    "start": "bun esbuild.js && bun run start:app",
-    "validate": "bun run validate:types",
-    "validate:types": "tsc --noEmit",
-    "clear": "rm -rf dist @types"
-  },
-  "author": "D7OM <hello@d7om.dev>",
-  "license": "MIT",
-  "dependencies": { "@girs/gjs": "^4.0.0-beta.16", "@girs/gtk-4.0": "^4.15.5-4.0.0-beta.16", "@types/node": "^22.7.7" },
-  "devDependencies": {
-    "esbuild": "^0.24.0",
-    "typescript": "^5.6.3"
-  }
+    "name": "keyvis",
+    "version": "0.2.0",
+    "description": "A simple and lightweight keystroke visualisation tool",
+    "type": "module",
+    "bin": {
+        "keyvis": "./keyvis"
+    },
+    "scripts": {
+        "build:app": "bun run esbuild.js",
+        "start:app": "gjs -m dist/main.js",
+        "debug": "GTK_DEBUG=interactive gjs -m dist/main.js",
+        "start": "bun esbuild.js && bun run start:app",
+        "validate": "bun run validate:types",
+        "validate:types": "tsc --noEmit",
+        "clear": "rm -rf dist @types"
+    },
+    "author": "D7OM <hello@d7om.dev>",
+    "license": "MIT",
+    "dependencies": {
+        "@girs/gjs": "^4.0.0-beta.16",
+        "@girs/gtk-4.0": "^4.15.5-4.0.0-beta.16",
+        "@types/node": "^22.7.7"
+    },
+    "devDependencies": {
+        "esbuild": "^0.24.0",
+        "typescript": "^5.6.3"
+    }
 }

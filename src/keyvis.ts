@@ -173,7 +173,7 @@ function setupHyprlandRules() {
         'windowrulev2 noshadow,class:(d7om.dev.keyvis)',
         'windowrulev2 animation slide bottom,class:(d7om.dev.keyvis)',
         'windowrulev2 nofocus,class:(d7om.dev.keyvis)',
-        'windowrule move 80% 92%,^(d7om.dev.keyvis)$',
+        'windowrule move 78% 92%,^(d7om.dev.keyvis)$',
         'windowrule noborder,class:(d7om.dev.keyvis)',
     ];
 

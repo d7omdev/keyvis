@@ -38,7 +38,16 @@ git clone https://github.com/d7omdev/keyvis
 cd keyvis
 ```
 
-Step 2: Run the Installation script
+Step 2: Make the Installation Script Executable
+
+Before running the installation script, ensure it is executable:
+
+```
+chmod +x install.sh
+```
+
+
+Step 3: Run the Installation script
 
 ```sh
 ./install.sh
