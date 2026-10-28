@@ -8,8 +8,9 @@
     },
     "scripts": {
         "build:app": "bun run esbuild.js",
-        "start:app": "gjs -m dist/main.js",
-        "debug": "GTK_DEBUG=interactive gjs -m dist/main.js",
+        "start:app": "LD_PRELOAD=libgtk4-layer-shell.so gjs -m dist/main.js",
+        "debug": "GTK_DEBUG=interactive LD_PRELOAD=libgtk4-layer-shell.so gjs -m dist/main.js",
+        "test": "bun test src",
         "start": "bun esbuild.js && bun run start:app",
         "validate": "bun run validate:types",
         "validate:types": "tsc --noEmit",

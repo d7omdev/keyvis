@@ -33,11 +33,6 @@ fi
 echo "Installing dependencies..."
 bun install || error "Failed to install dependencies."
 
-# Check if bun build script exists in package.json
-if ! bun run build:app >/dev/null 2>&1; then
-    error "'build:app' script not found in package.json. Aborting."
-fi
-
 # Build the project
 echo "Building the project..."
 bun run build:app || error "Build failed. Please check your build configuration."
@@ -54,6 +49,11 @@ fi
 echo "Creating the executable script..."
 sudo tee "$EXECUTABLE" >/dev/null <<'EOF'
 #!/usr/bin/env bash
+
+# gtk4-layer-shell must be preloaded before GTK touches Wayland
+if { ldconfig -p 2>/dev/null || /sbin/ldconfig -p 2>/dev/null; } | grep -q libgtk4-layer-shell.so; then
+    export LD_PRELOAD="libgtk4-layer-shell.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
 
 if [ $# -eq 0 ]; then
     gjs -m /usr/local/lib/keyvis/main.js > /dev/null 2>&1 &
