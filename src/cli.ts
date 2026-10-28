@@ -1,7 +1,7 @@
 import Gio from 'gi://Gio';
 import { exit } from '@girs/gjs/system';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 type LogLevel = 'INFO' | 'DEBUG' | 'ERROR';
 
